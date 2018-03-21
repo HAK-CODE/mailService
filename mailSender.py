@@ -20,3 +20,4 @@ class Mail:
             server.quit()
         except smtplib.SMTPException:
             print("Error: unable to send email")
+
