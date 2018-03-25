@@ -2,10 +2,9 @@ import argparse
 import sys
 import configparser
 import os
-import time
+from subprocess import check_output
 from mailSender import Mail
 from fileManager import FileManager
-from subprocess import check_output
 import time
 from datetime import datetime as dt
 
@@ -21,6 +20,7 @@ parser.add_argument('--maillist', '-l', type=str, help="Specify sender email lis
 parser.add_argument('--timeDiff', '-tf', type=int, default=15, help="Specify time difference threshold to trigger.")
 parser.add_argument('--file', '-f', type=str, help="Specify file name.")
 parser.add_argument('--screen', '-sr', type=str, help="Specify screen name.")
+parser.add_argument('--siteName', '-st', type=str, help="Specify site name.")
 args = parser.parse_args()
 
 programStart = False
@@ -31,7 +31,8 @@ if args.path is None or \
         args.maillist is None or \
         args.timeDiff is None or \
         args.file is None or \
-        args.screen is None:
+        args.screen is None or \
+        args.siteName is None:
     print('One of the parameter missing.')
     sys.exit(0)
 
@@ -52,7 +53,7 @@ def sendMailtoDIH():
         if config.has_section('dih.support'):
             senderList = [x[1] for x in config.items('dih.support')]
             config.clear()
-            config.read('./Config/messages.ini')
+            config.read('./Config/messages.cfg')
             messageList = [x[1] for x in config.items('dih.support')]
             service = Mail()
             service.send_mail(messageList[0],
@@ -68,7 +69,7 @@ def sendMailtoDIH():
         emailtoDIH = False
 
 
-def sendMailtoClients():
+def sendMailtoClients(receving):
     global emailtoClients
     if not emailtoClients:
         print('sending to clients')
@@ -78,12 +79,13 @@ def sendMailtoClients():
             senderList = [x[1] for x in config.items(args.maillist)]
             ccList = [x[1] for x in config.items('dih.support')]
             config.clear()
-            config.read('./Config/messages.ini')
+            config.read('./Config/messages.cfg')
             if config.has_section(args.maillist):
-                messageList = [x[1] for x in config.items(args.maillist)]
+                #config.get(args.maillist, 'message', vars={'sitename': args.siteName, 'lasttime': str(receving)})
                 service = Mail()
-                service.send_mail(messageList[0],
-                                  messageList[1],
+                service.send_mail(config.get(args.maillist, 'subject'),
+                                  config.get(args.maillist, 'message',
+                                             vars={'sitename': args.siteName, 'lasttime': str(receving)}),
                                   senderList,
                                   ccList)
                 f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 2)
