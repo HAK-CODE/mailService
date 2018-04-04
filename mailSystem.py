@@ -8,8 +8,6 @@ from fileManager import FileManager
 import time
 from datetime import datetime as dt
 
-
-
 parser = argparse.ArgumentParser(prog='MAILER',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  description='Send mail watching the directory.')
@@ -81,7 +79,7 @@ def sendMailtoClients(receving):
             config.clear()
             config.read('./Config/messages.cfg')
             if config.has_section(args.maillist):
-                #config.get(args.maillist, 'message', vars={'sitename': args.siteName, 'lasttime': str(receving)})
+                # config.get(args.maillist, 'message', vars={'sitename': args.siteName, 'lasttime': str(receving)})
                 service = Mail()
                 service.send_mail(config.get(args.maillist, 'subject'),
                                   config.get(args.maillist, 'message',
@@ -111,6 +109,6 @@ while True:
         dirTime = f.getDirTime()
         currTime = dt.now()
         if int(round((currTime - dirTime).total_seconds()) / 60) > args.timeDiff:
-            sendMailtoClients()
+            sendMailtoClients(dirTime)
 
     time.sleep(args.time)
