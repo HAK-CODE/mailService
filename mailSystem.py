@@ -7,6 +7,8 @@ from mailSender import Mail
 from fileManager import FileManager
 import time
 from datetime import datetime as dt
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 parser = argparse.ArgumentParser(prog='MAILER',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -19,6 +21,7 @@ parser.add_argument('--timeDiff', '-tf', type=int, default=15, help="Specify tim
 parser.add_argument('--file', '-f', type=str, help="Specify file name.")
 parser.add_argument('--screen', '-sr', type=str, help="Specify screen name.")
 parser.add_argument('--siteName', '-st', type=str, help="Specify site name.")
+parser.add_argument('--isCSV', '-csv', type=int, help="Specify if files are in json or csv.")
 args = parser.parse_args()
 
 programStart = False
@@ -30,7 +33,8 @@ if args.path is None or \
         args.timeDiff is None or \
         args.file is None or \
         args.screen is None or \
-        args.siteName is None:
+        args.siteName is None or \
+        args.isCSV is None:
     print('One of the parameter missing.')
     sys.exit(0)
 
@@ -42,7 +46,7 @@ f = FileManager()
 f.setFile(args.file)
 
 
-def sendMailtoDIH():
+def sendMailtoDIH(screen=False, timeAhead=False):
     global emailtoDIH
     if not emailtoDIH:
         print('sending to dih')
@@ -60,14 +64,15 @@ def sendMailtoDIH():
             f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 1)
             emailtoDIH = True
     latestTime = dt.now()
-    screenTime = f.getEmailTime(screen=True)
-    if (latestTime - screenTime).days > 1:
-        print('screen email set again')
-        f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 1)
-        emailtoDIH = False
+    screenTime = f.getEmailTime(screen, timeAhead)
+    if screen is True and timeAhead is False:
+        if (latestTime - screenTime).days > 1:
+            print('screen email set again')
+            f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 1)
+            emailtoDIH = False
 
 
-def sendMailtoClients(receving):
+def sendMailtoClients(receving=None, screen=False, timeAhead=False):
     global emailtoClients
     if not emailtoClients:
         print('sending to clients')
@@ -78,37 +83,62 @@ def sendMailtoClients(receving):
             ccList = [x[1] for x in config.items('dih.support')]
             config.clear()
             config.read('./Config/messages.cfg')
-            if config.has_section(args.maillist):
+            service = Mail()
+            if config.has_section(args.maillist) and timeAhead is False:
                 # config.get(args.maillist, 'message', vars={'sitename': args.siteName, 'lasttime': str(receving)})
-                service = Mail()
                 service.send_mail(config.get(args.maillist, 'subject'),
                                   config.get(args.maillist, 'message',
                                              vars={'sitename': args.siteName, 'lasttime': str(receving)}),
                                   senderList,
                                   ccList)
                 f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 2)
-                emailtoClients = True
+            else:
+                service.send_mail('Files time inconsistent', 'Dear Reon files are ahead of time', senderList, ccList)
+                f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 3)
+            emailtoClients = True
     latestTime = dt.now()
-    dirTime = f.getEmailTime(screen=False)
+    dirTime = f.getEmailTime(screen, timeAhead)
     print((latestTime - dirTime).days)
-    if (latestTime - dirTime).days > 1:
-        print('dir email set again')
-        f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 1)
-        emailtoClients = False
+    if timeAhead is True and screen is False:
+        if (latestTime - dirTime).days > 1:
+            print('dir email set again')
+            f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 3)
+            emailtoClients = False
+    elif timeAhead is False and screen is False:
+        if (latestTime - dirTime).days > 1:
+            print('dir email set again')
+            f.addLine(dt.now().strftime('%a %b %d %H:%M:%S %Y'), 2)
+            emailtoClients = False
 
 
-while True:
-    screenNames = check_output(["screen -ls; true"], shell=True)
-    if not "." + args.screen + "\t(" in screenNames.decode('utf-8'):
-        sendMailtoDIH()
-    if not programStart:
-        f.addLine(str(time.ctime(os.path.getctime(args.path))), 0)
-        programStart = True
-    else:
-        f.addLine(str(time.ctime(os.path.getctime(args.path))), 0)
-        dirTime = f.getDirTime()
-        currTime = dt.now()
-        if int(round((currTime - dirTime).total_seconds()) / 60) > args.timeDiff:
-            sendMailtoClients(dirTime)
+class Handler(FileSystemEventHandler):
+    def on_created(self, event):
+        if args.isCSV == 1:
+            if (round((dt.now() - dt.strptime(''.join(filter(lambda x: x.isdigit(), event.src_path)),
+                                              '%Y%m%d%H%M%S')).total_seconds()) / 60) < 0:
+                sendMailtoClients(receving=None, screen=False, timeAhead=True)
 
-    time.sleep(args.time)
+
+event_handler = Handler()
+observer = Observer()
+observer.schedule(event_handler, args.path, recursive=False)
+observer.start()
+try:
+    while True:
+        screenNames = check_output(["screen -ls; true"], shell=True)
+        if not "." + args.screen + "\t(" in screenNames.decode('utf-8'):
+            sendMailtoDIH(screen=True, timeAhead=False)
+        if not programStart:
+            f.addLine(str(time.ctime(os.path.getctime(args.path))), 0)
+            programStart = True
+        else:
+            f.addLine(str(time.ctime(os.path.getctime(args.path))), 0)
+            dirTime = f.getDirTime()
+            currTime = dt.now()
+            if int(round((currTime - dirTime).total_seconds()) / 60) > args.timeDiff:
+                sendMailtoClients(receving=dirTime, screen=False, timeAhead=False)
+        time.sleep(args.time)
+except:
+    observer.stop()
+    print("Observer Stopped.")
+observer.join()

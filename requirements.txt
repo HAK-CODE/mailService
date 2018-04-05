@@ -1,0 +1,11 @@
+argh==0.26.2
+pathtools==0.1.2
+protobuf==3.5.2.post1
+pycrypto==2.6.1
+python-axolotl==0.1.39
+python-axolotl-curve25519==0.1
+python-dateutil==2.7.1
+PyYAML==3.12
+six==1.10.0
+watchdog==0.8.3
+yowsup2==2.5.7
