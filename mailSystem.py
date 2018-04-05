@@ -114,7 +114,8 @@ def sendMailtoClients(receving=None, screen=False, timeAhead=False):
 class Handler(FileSystemEventHandler):
     def on_created(self, event):
         if args.isCSV == 1:
-            if (round((dt.now() - dt.strptime(''.join(filter(lambda x: x.isdigit(), event.src_path)),
+            print(dt.strptime(filter(lambda x: x.isdigit(), os.path.basename(event.src_path)),'%Y%m%d%H%M%S'))
+            if (round((dt.now() - dt.strptime(''.join(filter(lambda x: x.isdigit(), os.path.basename(event.src_path))),
                                               '%Y%m%d%H%M%S')).total_seconds()) / 60) < 0:
                 sendMailtoClients(receving=None, screen=False, timeAhead=True)
 
@@ -124,6 +125,7 @@ observer = Observer()
 observer.schedule(event_handler, args.path, recursive=False)
 observer.start()
 try:
+    print('starting')
     while True:
         screenNames = check_output(["screen -ls; true"], shell=True)
         if not "." + args.screen + "\t(" in screenNames.decode('utf-8'):
